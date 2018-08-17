@@ -1,5 +1,5 @@
 from z3 import *
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 
 students = {
     "alice": [[13.5, 14.5], [9.5,10.75]],
@@ -7,7 +7,8 @@ students = {
     "charlie": []
 }
 
-sections = [[8.0, 9.0], [9.0, 10.0], [11.0, 12.0], [13.0, 14.0]]
+Section = namedtuple('Section', ['classroom', 'time'])
+sections = [Section('1111', [8.0, 9.0]), Section('2222', [9.0, 10.0]), Section('3333', [11.0, 12.0]), Section('4444', [13.0, 14.0])]
 
 def compat(interval1, interval2):
     first_overlap = (interval1[0] <= interval2[0] <= interval1[1]) or (interval1[0] <= interval2[1] <= interval1[1])
@@ -46,7 +47,7 @@ def make_constraints(students, sections):
         for section_id in range(1,len(sections)+1):
             i = section_id - 1
             for class_time in student_schedule:
-                if not compat(class_time, sections[i]):
+                if not compat(class_time, sections[i].time):
                     for sv in current_student_variables:
                         s.add(sv != section_id)
 
@@ -58,7 +59,7 @@ def make_constraints(students, sections):
         i = section_id_1 - 1
         for section_id_2 in range(section_id_1, len(sections)+1):
             j = section_id_2 - 1
-            if not compat(sections[i], sections[j]): # should have slightly different compat function
+            if not compat(sections[i].time, sections[j].time): # should have slightly different compat function
                 incompatible_pairs.append( (section_id_1, section_id_2))
     #print(incompatible_pairs)
 
@@ -80,7 +81,7 @@ def make_constraints(students, sections):
     # what else might we need????
     return s
 
-print("First example...")
+print("First example, should be SAT...")
 s = make_constraints(students, sections)
 print(s.check())
 print(s.assertions())
@@ -88,8 +89,8 @@ print(s.model())
 
 print('******')
 
-print("Overlap should be constrained...")
+print("Overlap should be constrained, should be UNSAT...")
 one_student = {"charlie": []}
-two_overlapping_sections = [[9.0,10.0], [9.0,10.0]]
+two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("2222", [9.0,10.0])]
 s2 = make_constraints(one_student, two_overlapping_sections)
 print(s2.check())
