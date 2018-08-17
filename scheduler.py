@@ -11,10 +11,25 @@ Section = namedtuple('Section', ['classroom', 'time'])
 sections = [Section('1111', [8.0, 9.0]), Section('2222', [9.0, 10.0]), Section('3333', [11.0, 12.0]), Section('4444', [13.0, 14.0])]
 
 def compat(interval1, interval2):
+    """
+    Returns true if two time intervals are compatible, i.e. don't overlap.
+    """
     first_overlap = (interval1[0] <= interval2[0] <= interval1[1]) or (interval1[0] <= interval2[1] <= interval1[1])
     second_overlap = (interval2[0] <= interval1[0] <= interval2[1]) or (interval2[0] <= interval1[1] <= interval2[1])
     # compatible if no overlap
     return (not (first_overlap or second_overlap))
+
+def sections_compat(section1, section2):
+    """
+    Returns true if two sections are compatible, i.e. don't overlap,
+    except for special case where two sections are back-to-back in the
+    same classroom.
+    """
+    if section1.classroom == section2.classroom:
+        if section1.time[1] == section2.time[0]:
+            return True
+    return compat(section1.time, section2.time)
+
 
 def make_constraints(students, sections):
     student_vars = defaultdict(list)
@@ -59,7 +74,7 @@ def make_constraints(students, sections):
         i = section_id_1 - 1
         for section_id_2 in range(section_id_1, len(sections)+1):
             j = section_id_2 - 1
-            if not compat(sections[i].time, sections[j].time): # should have slightly different compat function
+            if not sections_compat(sections[i], sections[j]): # should have slightly different compat function
                 incompatible_pairs.append( (section_id_1, section_id_2))
     #print(incompatible_pairs)
 
@@ -94,3 +109,17 @@ one_student = {"charlie": []}
 two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("2222", [9.0,10.0])]
 s2 = make_constraints(one_student, two_overlapping_sections)
 print(s2.check())
+
+print('******')
+print('Overlapping on edge, and different classroom -- should be UNSAT...')
+one_student = {"charlie": []}
+two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("2222", [10.0,11.0])]
+s3 = make_constraints(one_student, two_overlapping_sections)
+print(s3.check())
+
+print('******')
+print('Overlapping on edge, but same classroom -- should be SAT...')
+one_student = {"charlie": []}
+two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("1111", [10.0,11.0])]
+s3 = make_constraints(one_student, two_overlapping_sections)
+print(s3.check())
