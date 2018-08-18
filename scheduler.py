@@ -19,7 +19,8 @@ def sections_compat(section1, section2):
     same classroom.
     """
     if section1.classroom == section2.classroom:
-        if section1.time[1] == section2.time[0]:
+        if (section1.time[1] == section2.time[0] or
+                section2.time[1] == section1.time[0]):
             return True
     return compat(section1.time, section2.time)
 
@@ -68,9 +69,8 @@ def make_constraints(students, sections):
         i = section_id_1 - 1
         for section_id_2 in range(section_id_1, len(sections)+1):
             j = section_id_2 - 1
-            if not sections_compat(sections[i], sections[j]): # should have slightly different compat function
+            if not sections_compat(sections[i], sections[j]): 
                 incompatible_pairs.append( (section_id_1, section_id_2))
-    #print(incompatible_pairs)
 
 
     for key in student_vars:
