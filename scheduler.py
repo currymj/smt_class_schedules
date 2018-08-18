@@ -28,7 +28,8 @@ def make_constraints(students, sections):
     student_vars = defaultdict(list)
     flattened_vars = []
 
-    s = Solver()
+    #s = Solver()
+    s = Optimize()
 
     # two possible section assignments per student
     # must be assigned to section i (1-indexed) , or 0 (no assignment)
@@ -85,7 +86,19 @@ def make_constraints(students, sections):
                 )))
 
 
+    # soft constraints
+    for key in student_vars:
+        student_schedule = students[key]["preferences"]
+        current_student_variables = student_vars[key]
+
+        for section_id in range(1,len(sections)+1):
+            i = section_id - 1
+            for class_time in student_schedule:
+                if not compat(class_time, sections[i].time):
+                    for sv in current_student_variables:
+                        s.add_soft(sv != section_id)
+
 
     # what else might we need????
-    return s
+    return s, student_vars
 
