@@ -1,14 +1,7 @@
 from z3 import *
 from collections import defaultdict, namedtuple
 
-students = {
-    "alice": [[13.5, 14.5], [9.5,10.75]],
-    "bob": [[9.5, 11.0]],
-    "charlie": []
-}
-
 Section = namedtuple('Section', ['classroom', 'time'])
-sections = [Section('1111', [8.0, 9.0]), Section('2222', [9.0, 10.0]), Section('3333', [11.0, 12.0]), Section('4444', [13.0, 14.0])]
 
 def compat(interval1, interval2):
     """
@@ -56,7 +49,7 @@ def make_constraints(students, sections):
 
     # constrain compatibility for each student
     for key in student_vars:
-        student_schedule = students[key]
+        student_schedule = students[key]["classes"]
         current_student_variables = student_vars[key]
 
         for section_id in range(1,len(sections)+1):
@@ -96,30 +89,37 @@ def make_constraints(students, sections):
     # what else might we need????
     return s
 
-print("First example, should be SAT...")
-s = make_constraints(students, sections)
-print(s.check())
-print(s.assertions())
-print(s.model())
+def test_one():
+    students = {
+        "alice": {
+            "classes":[[13.5, 14.5], [9.5,10.75]],
+            "preferences": []
+        },
+        "bob": {"classes": [[9.5, 11.0]], "preferences": []},
+        "charlie": {"classes": [], "preferences": []}
+    }
 
-print('******')
+    sections = [Section('1111', [8.0, 9.0]), Section('2222', [9.0, 10.0]), Section('3333', [11.0, 12.0]), Section('4444', [13.0, 14.0])]
 
-print("Overlap should be constrained, should be UNSAT...")
-one_student = {"charlie": []}
-two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("2222", [9.0,10.0])]
-s2 = make_constraints(one_student, two_overlapping_sections)
-print(s2.check())
+    s = make_constraints(students, sections)
+    assert(s.check().__repr__ == 'sat')
 
-print('******')
-print('Overlapping on edge, and different classroom -- should be UNSAT...')
-one_student = {"charlie": []}
-two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("2222", [10.0,11.0])]
-s3 = make_constraints(one_student, two_overlapping_sections)
-print(s3.check())
+def test_overlap_sections():
+    students = {"charlie": {"classes": [], "preferences": []}}
+    sections = [Section("1111", [9.0,10.0]), Section("2222", [9.0,10.0])]
+    s = make_constraints(students, sections)
+    assert(s.check().__repr__ == 'unsat')
 
-print('******')
-print('Overlapping on edge, but same classroom -- should be SAT...')
-one_student = {"charlie": []}
-two_overlapping_sections = [Section("1111", [9.0,10.0]), Section("1111", [10.0,11.0])]
-s3 = make_constraints(one_student, two_overlapping_sections)
-print(s3.check())
+def test_backtoback_different():
+    students = {"charlie": {"classes": [], "preferences": []}}
+    sections = [Section("1111", [9.0,10.0]), Section("2222", [10.0,11.0])]
+    s = make_constraints(students, sections)
+    assert(s.check().__repr__ == 'unsat')
+
+
+def test_backtoback_same():
+    students = {"charlie": {"classes": [], "preferences": []}}
+    sections = [Section("1111", [9.0,10.0]), Section("1111", [10.0,11.0])]
+    s = make_constraints(students, sections)
+    assert(s.check().__repr__ == 'sat')
+
