@@ -6,10 +6,18 @@ Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort('Day',
 
 TimeBlock = Datatype('TimeBlock')
 TimeBlock.declare('timeblock', ('day', Day), ('starttime', IntSort()), ('endtime', IntSort()))
+TimeBlock.declare('none')
 TimeBlock = TimeBlock.create()
 timeblock = TimeBlock.timeblock
 starttime = TimeBlock.starttime
 endtime = TimeBlock.endtime
+none = TimeBlock.none
+
+def block_length(tb):
+    return If(tb == none, 0, endtime(tb) - starttime(tb))
+
+def count_assigned(tbs):
+    return Sum([If(tb == none, 0, 1) for tb in tbs])
 
 s = Solver()
 
@@ -35,6 +43,19 @@ def overlap_constraint_sameday(tb1, tb2):
     """
     return And(overlap_constraint(tb1, tb2), TimeBlock.day(tb1) == TimeBlock.day(tb2))
 
+def any_sameday(tbs):
+    all_constraints = []
+    for i in range(len(tbs)):
+        for j in range(i+1, len(tbs)):
+            all_constraints.append(
+                #Implies(
+                    #Not(Or(tbs[i] == none, tbs[j] == none)),
+                    #TimeBlock.day(tbs[i]) != TimeBlock.day(tbs[j])
+                #))
+                    TimeBlock.day(tbs[i]) == TimeBlock.day(tbs[j]))
+    return Or(all_constraints)
+
+
 s.add(endtime(tb) - starttime(tb) > 3)
 s.add(starttime(tb) > 8)
 s.add(TimeBlock.day(tb) == thursday)
@@ -56,20 +77,35 @@ def make_constraints(students):
     max_slots = 4
     assignment_vars = defaultdict(list)
     all_svs = []
+
+    # note: may have to choose smaller than hour
+    # increments, in which case should still be integers
+    FIRST_TIME = 8
+    LAST_TIME = 18
     for key in students:
         for i in range(max_slots):
             sv = Const('{}_{}'.format(key, i), TimeBlock)
             all_svs.append(sv)
-            s.add(starttime(sv) > 0)
+            # times must be > 0, end after start
+            s.add(starttime(sv) >= FIRST_TIME)
             s.add(endtime(sv) > starttime(sv))
+            s.add(endtime(sv) <= LAST_TIME)
             assignment_vars[key].append(sv)
+
 
         for sv in assignment_vars[key]:
             for blocked in students[key]["blocked_times"]:
+                # no students' times can be 
                 s.add(Not(overlap_constraint_sameday(sv, blocked)))
 
-        assignment_times = [endtime(tb) - starttime(tb) for tb in assignment_vars[key]]
+        assignment_times = [block_length(tb) for tb in assignment_vars[key]]
         s.add(Sum(assignment_times) == students[key]["num_hours"])
+        assigned_count = count_assigned(assignment_vars[key])
+        s.add(assigned_count >= 2)
+        s.add(assigned_count <= 4)
+        s.add(Not(any_sameday(assignment_vars[key])))
+
+        # pairwise constraint... none same day
     return s
 
 s = make_constraints(students)
