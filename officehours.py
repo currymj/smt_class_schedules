@@ -43,18 +43,15 @@ def overlap_constraint_sameday(tb1, tb2):
     """
     return And(overlap_constraint(tb1, tb2), TimeBlock.day(tb1) == TimeBlock.day(tb2))
 
-def any_sameday(tbs):
+def not_any_sameday(tbs):
     all_constraints = []
     for i in range(len(tbs)):
         for j in range(i+1, len(tbs)):
             all_constraints.append(
-                #Implies(
-                    #Not(Or(tbs[i] == none, tbs[j] == none)),
-                    #TimeBlock.day(tbs[i]) != TimeBlock.day(tbs[j])
-                #))
-                    TimeBlock.day(tbs[i]) == TimeBlock.day(tbs[j]))
-    return Or(all_constraints)
-
+                Implies(
+                    Not(Or(tbs[i] == none, tbs[j] == none)),
+                    TimeBlock.day(tbs[i]) != TimeBlock.day(tbs[j])))
+    return And(all_constraints)
 
 s.add(endtime(tb) - starttime(tb) > 3)
 s.add(starttime(tb) > 8)
@@ -102,8 +99,8 @@ def make_constraints(students):
         s.add(Sum(assignment_times) == students[key]["num_hours"])
         assigned_count = count_assigned(assignment_vars[key])
         s.add(assigned_count >= 2)
-        s.add(assigned_count <= 4)
-        s.add(Not(any_sameday(assignment_vars[key])))
+        s.add(assigned_count <= 2)
+        s.add(not_any_sameday(assignment_vars[key]))
 
         # pairwise constraint... none same day
     return s
