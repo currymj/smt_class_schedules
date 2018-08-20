@@ -1,11 +1,11 @@
 from z3 import *
+from collections import defaultdict
 
 Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort('Day',
                                                                ('monday', 'tuesday', 'wednesday', 'thursday', 'friday'))
 
 TimeBlock = Datatype('TimeBlock')
 TimeBlock.declare('timeblock', ('day', Day), ('starttime', IntSort()), ('endtime', IntSort()))
-TimeBlock.declare('none')
 TimeBlock = TimeBlock.create()
 timeblock = TimeBlock.timeblock
 starttime = TimeBlock.starttime
@@ -35,7 +35,6 @@ def overlap_constraint_sameday(tb1, tb2):
     """
     return And(overlap_constraint(tb1, tb2), TimeBlock.day(tb1) == TimeBlock.day(tb2))
 
-s.add(tb != TimeBlock.none)
 s.add(endtime(tb) - starttime(tb) > 3)
 s.add(starttime(tb) > 8)
 s.add(TimeBlock.day(tb) == thursday)
@@ -46,3 +45,33 @@ s.add(Not(overlap_constraint_sameday(tb, tb2)))
 print(s.check())
 print(s.model())
 
+students = {"charlie": {
+    "num_hours": 4,
+    "blocked_times": [timeblock(monday, 8,9), timeblock(tuesday, 10,12)]
+}}
+
+def make_constraints(students):
+    s = Solver()
+
+    max_slots = 4
+    assignment_vars = defaultdict(list)
+    all_svs = []
+    for key in students:
+        for i in range(max_slots):
+            sv = Const('{}_{}'.format(key, i), TimeBlock)
+            all_svs.append(sv)
+            s.add(starttime(sv) > 0)
+            s.add(endtime(sv) > starttime(sv))
+            assignment_vars[key].append(sv)
+
+        for sv in assignment_vars[key]:
+            for blocked in students[key]["blocked_times"]:
+                s.add(Not(overlap_constraint_sameday(sv, blocked)))
+
+        assignment_times = [endtime(tb) - starttime(tb) for tb in assignment_vars[key]]
+        s.add(Sum(assignment_times) == students[key]["num_hours"])
+    return s
+
+s = make_constraints(students)
+print(s.check())
+print(s.model())
