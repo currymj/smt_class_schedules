@@ -40,15 +40,16 @@ def file_to_constraints(csvfile):
                 result_dictionary["prefer_not"].append( (day, time_block))
     return result_dictionary
 
-with open('./example_officehours_constraints.csv', 'r') as f:
-    print(file_to_constraints(f))
 
 
-s = Solver()
 
-tb = Const('tb', TimeBlock)
+def includes_time_sameday(tb, day_and_time):
+    day, time = day_and_time
+    return And(TimeBlock.day(tb) == day,
+               And(starttime(tb) <= time, endtime(tb) >= time))
 
-tb2 = timeblock(thursday, 9, 11)
+
+
 
 def overlap_constraint(tb1, tb2):
     """
@@ -78,66 +79,59 @@ def not_any_sameday(tbs):
                     TimeBlock.day(tbs[i]) != TimeBlock.day(tbs[j])))
     return And(all_constraints)
 
-s.add(endtime(tb) - starttime(tb) > 3)
-s.add(starttime(tb) > 8)
-s.add(TimeBlock.day(tb) == thursday)
-#s.add(TimeBlock.day(tb2) == thursday)
-#s.add(starttime(tb2) == 9)
-#s.add(endtime(tb2) == 11)
-s.add(Not(overlap_constraint_sameday(tb, tb2)))
-print(s.check())
-print(s.model())
+with open('./example_officehours_constraints.csv', 'r') as f:
+    example_constraints = file_to_constraints(f)
 
 students = {
     "alice": {
-        "num_hours": 3,
-        "blocked_times": [timeblock(monday, 8,9), timeblock(wednesday, 8, 9)]
+        "constraints": example_constraints,
+        "num_hours": 3
     },
     "bob": {
-        "num_hours": 4,
-        "blocked_times": [timeblock(monday, 8,9), timeblock(tuesday, 10,12),
-                          timeblock(wednesday, 14, 16)]
+        "constraints": example_constraints,
+        "num_hours": 3
     },
     "charlie": {
-        "num_hours": 4,
-        "blocked_times": [timeblock(monday, 8,9), timeblock(tuesday, 10,12)]
+        "constraints": example_constraints,
+        "num_hours": 4
     }
 }
 
 def make_constraints(students):
-    s = Solver()
+    s = Optimize()
 
-    max_slots = 4
+    max_slots = 3
     assignment_vars = defaultdict(list)
     all_svs = []
 
     # note: may have to choose smaller than hour
     # increments, in which case should still be integers
-    FIRST_TIME = 8
-    LAST_TIME = 18
-    for key in students:
+    FIRST_TIME = 1
+    LAST_TIME = 41
+    for student_name in students:
         for i in range(max_slots):
-            sv = Const('{}_{}'.format(key, i), TimeBlock)
+            sv = Const('{}_{}'.format(student_name, i), TimeBlock)
             all_svs.append(sv)
             # times must be > 0, end after start
             s.add(starttime(sv) >= FIRST_TIME)
             s.add(endtime(sv) > starttime(sv))
             s.add(endtime(sv) <= LAST_TIME)
-            assignment_vars[key].append(sv)
+            assignment_vars[student_name].append(sv)
 
 
-        for sv in assignment_vars[key]:
-            for blocked in students[key]["blocked_times"]:
-                # no students' times can be 
-                s.add(Not(overlap_constraint_sameday(sv, blocked)))
+        for sv in assignment_vars[student_name]:
+            for day_and_time in students[student_name]["constraints"]["impossible"]:
+                s.add(Not(includes_time_sameday(sv, day_and_time)))
+            for day_and_time in students[student_name]["constraints"]["prefer_not"]:
+                s.add_soft(Not(includes_time_sameday(sv, day_and_time)))
 
-        assigned_count = count_assigned(assignment_vars[key])
+        assigned_count = count_assigned(assignment_vars[student_name])
         s.add(assigned_count >= 2)
-        s.add(assigned_count <= 4)
-        s.add(not_any_sameday(assignment_vars[key]))
+        s.add(not_any_sameday(assignment_vars[student_name]))
 
-    # desired goals globally: more coverage during busy times (say 11-4)
-    # desired goals per student: 
+        block_lengths = [block_length(tb) for tb in assignment_vars[student_name]]
+        s.add(Sum(block_lengths) == students[student_name]["num_hours"])
+
     return s
 
 s = make_constraints(students)
