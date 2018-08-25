@@ -1,8 +1,12 @@
 from z3 import *
 from collections import defaultdict
+import csv
 
-Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort('Day',
-                                                               ('monday', 'tuesday', 'wednesday', 'thursday', 'friday'))
+
+
+Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort(
+    'Day', ('monday', 'tuesday', 'wednesday', 'thursday', 'friday'))
+days_list = [monday, tuesday, wednesday, thursday, friday]
 
 TimeBlock = Datatype('TimeBlock')
 TimeBlock.declare('timeblock', ('day', Day), ('starttime', IntSort()), ('endtime', IntSort()))
@@ -18,6 +22,27 @@ def block_length(tb):
 
 def count_assigned(tbs):
     return Sum([If(tb == none, 0, 1) for tb in tbs])
+
+def file_to_constraints(csvfile):
+    result_dictionary = {
+        "impossible": [],
+        "prefer_not": []
+    }
+    csvreader = csv.reader(csvfile, delimiter=',')
+    next(csvreader, None) # skip header
+    time_block = 0
+    for csvline in csvreader:
+        time_block += 1
+        for i, day in enumerate(days_list, 1):
+            if csvline[i].lower() == 'x':
+                result_dictionary["impossible"].append( (day, time_block))
+            if csvline[i].lower() == '2':
+                result_dictionary["prefer_not"].append( (day, time_block))
+    return result_dictionary
+
+with open('./example_officehours_constraints.csv', 'r') as f:
+    print(file_to_constraints(f))
+
 
 s = Solver()
 
@@ -63,10 +88,21 @@ s.add(Not(overlap_constraint_sameday(tb, tb2)))
 print(s.check())
 print(s.model())
 
-students = {"charlie": {
-    "num_hours": 4,
-    "blocked_times": [timeblock(monday, 8,9), timeblock(tuesday, 10,12)]
-}}
+students = {
+    "alice": {
+        "num_hours": 3,
+        "blocked_times": [timeblock(monday, 8,9), timeblock(wednesday, 8, 9)]
+    },
+    "bob": {
+        "num_hours": 4,
+        "blocked_times": [timeblock(monday, 8,9), timeblock(tuesday, 10,12),
+                          timeblock(wednesday, 14, 16)]
+    },
+    "charlie": {
+        "num_hours": 4,
+        "blocked_times": [timeblock(monday, 8,9), timeblock(tuesday, 10,12)]
+    }
+}
 
 def make_constraints(students):
     s = Solver()
@@ -95,14 +131,13 @@ def make_constraints(students):
                 # no students' times can be 
                 s.add(Not(overlap_constraint_sameday(sv, blocked)))
 
-        assignment_times = [block_length(tb) for tb in assignment_vars[key]]
-        s.add(Sum(assignment_times) == students[key]["num_hours"])
         assigned_count = count_assigned(assignment_vars[key])
         s.add(assigned_count >= 2)
-        s.add(assigned_count <= 2)
+        s.add(assigned_count <= 4)
         s.add(not_any_sameday(assignment_vars[key]))
 
-        # pairwise constraint... none same day
+    # desired goals globally: more coverage during busy times (say 11-4)
+    # desired goals per student: 
     return s
 
 s = make_constraints(students)
