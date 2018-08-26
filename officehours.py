@@ -1,8 +1,7 @@
 from z3 import *
 from collections import defaultdict
 import csv
-
-
+from pprint import pprint
 
 Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort(
     'Day', ('monday', 'tuesday', 'wednesday', 'thursday', 'friday'))
@@ -23,24 +22,6 @@ def block_length(tb):
 def count_assigned(tbs):
     return Sum([If(tb == none, 0, 1) for tb in tbs])
 
-def file_to_constraints(csvfile):
-    result_dictionary = {
-        "impossible": [],
-        "prefer_not": []
-    }
-    csvreader = csv.reader(csvfile, delimiter=',')
-    next(csvreader, None) # skip header
-    time_block = 0
-    for csvline in csvreader:
-        time_block += 1
-        for i, day in enumerate(days_list, 1):
-            if csvline[i].lower() == 'x':
-                result_dictionary["impossible"].append( (day, time_block))
-            if csvline[i].lower() == '2':
-                result_dictionary["prefer_not"].append( (day, time_block))
-    return result_dictionary
-
-
 def fieldname_to_time(fname):
     day = days_list[int(fname[0])]
     hour, minute = fname[1:].split('.')
@@ -52,19 +33,35 @@ assert(fieldname_to_time("310.1") == (thursday, 5))
 
 def line_to_constraints(input_line):
     """
-    accepts a line from csv.reader and outputs constraints dictionary
-    """
-    raise NotImplementedError
+    accepts a line from csv.reader and outputs constraints dictionary """
+    constraints = {
+        "impossible": [],
+        "prefer_not": [],
+        "num_hours": int(input_line[1])
+    }
+
+    line = input_line[2:] # drop name
+    for i in range(0, len(line)-1, 2):
+        time = fieldname_to_time(line[i])
+        status = line[i+1]
+        if status.lower() == 'x':
+            constraints["impossible"].append(time)
+        elif status.lower() != '1':
+            constraints["prefer_not"].append(time)
+    return constraints
 
 
+def file_to_constraints(csvfile):
+    csvreader = csv.reader(csvfile, delimiter=',')
+    result_dictionary = {}
+    for line in csvreader:
+        result_dictionary[line[0]] = line_to_constraints(line)
+    return result_dictionary
 
 def includes_time_sameday(tb, day_and_time):
     day, time = day_and_time
     return And(TimeBlock.day(tb) == day,
                And(starttime(tb) <= time, endtime(tb) >= time))
-
-
-
 
 def overlap_constraint(tb1, tb2):
     """
@@ -94,23 +91,10 @@ def not_any_sameday(tbs):
                     TimeBlock.day(tbs[i]) != TimeBlock.day(tbs[j])))
     return And(all_constraints)
 
-with open('./example_officehours_constraints.csv', 'r') as f:
-    example_constraints = file_to_constraints(f)
+with open('./hours_file.csv', 'r') as f:
+    students = file_to_constraints(f)
 
-students = {
-    "alice": {
-        "constraints": example_constraints,
-        "num_hours": 3
-    },
-    "bob": {
-        "constraints": example_constraints,
-        "num_hours": 3
-    },
-    "charlie": {
-        "constraints": example_constraints,
-        "num_hours": 4
-    }
-}
+#pprint(students)
 
 def make_constraints(students):
     s = Optimize()
@@ -122,7 +106,7 @@ def make_constraints(students):
     # note: may have to choose smaller than hour
     # increments, in which case should still be integers
     FIRST_TIME = 1
-    LAST_TIME = 41
+    LAST_TIME = 40
     for student_name in students:
         for i in range(max_slots):
             sv = Const('{}_{}'.format(student_name, i), TimeBlock)
@@ -135,9 +119,9 @@ def make_constraints(students):
 
 
         for sv in assignment_vars[student_name]:
-            for day_and_time in students[student_name]["constraints"]["impossible"]:
+            for day_and_time in students[student_name]["impossible"]:
                 s.add(Not(includes_time_sameday(sv, day_and_time)))
-            for day_and_time in students[student_name]["constraints"]["prefer_not"]:
+            for day_and_time in students[student_name]["prefer_not"]:
                 s.add_soft(Not(includes_time_sameday(sv, day_and_time)))
 
         assigned_count = count_assigned(assignment_vars[student_name])
