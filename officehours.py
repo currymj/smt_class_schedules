@@ -41,6 +41,21 @@ def file_to_constraints(csvfile):
     return result_dictionary
 
 
+def fieldname_to_time(fname):
+    day = days_list[int(fname[0])]
+    hour, minute = fname[1:].split('.')
+    time = (int(hour) - 9)*4 + int(minute)
+    return (day, time)
+
+assert(fieldname_to_time("39.1") == (thursday, 1))
+assert(fieldname_to_time("310.1") == (thursday, 5))
+
+def line_to_constraints(input_line):
+    """
+    accepts a line from csv.reader and outputs constraints dictionary
+    """
+    raise NotImplementedError
+
 
 
 def includes_time_sameday(tb, day_and_time):
