@@ -2,6 +2,7 @@ from z3 import *
 from collections import defaultdict
 import csv
 from pprint import pprint
+from timeit import default_timer as timer
 
 Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort(
     'Day', ('monday', 'tuesday', 'wednesday', 'thursday', 'friday'))
@@ -17,12 +18,18 @@ endtime = TimeBlock.endtime
 none = TimeBlock.none
 
 def block_length(tb):
+    "returns the length of a time block (defaulting to 0 for none)"
     return If(tb == none, 0, endtime(tb) - starttime(tb))
 
 def count_assigned(tbs):
+    "returns the number of variables in a list not assigned none"
     return Sum([If(tb == none, 0, 1) for tb in tbs])
 
 def fieldname_to_time(fname):
+    """
+    Takes a fieldname from the constraint csv and turns it into
+    a (day, time) tuple.
+    """
     day = days_list[int(fname[0])]
     hour, minute = fname[1:].split('.')
     time = (int(hour) - 9)*4 + int(minute)
@@ -62,24 +69,6 @@ def includes_time_sameday(tb, day_and_time):
     day, time = day_and_time
     return And(TimeBlock.day(tb) == day,
                And(starttime(tb) <= time, endtime(tb) >= time))
-
-def overlap_constraint(tb1, tb2):
-    """
-    Returns a boolean statement that is true if tb1 and tb2 overlap,
-    without regard to day.
-    """
-    # start1 <= start2 <= end1 OR start2 <= start1 <= end2 should cover
-    # all four cases
-    overlap1 = And(starttime(tb1) <= starttime(tb2), starttime(tb2) <= endtime(tb1))
-    overlap2 = And(starttime(tb2) <= starttime(tb1), starttime(tb1) <= endtime(tb2))
-    return Or(overlap1, overlap2)
-
-def overlap_constraint_sameday(tb1, tb2):
-    """
-    Returns a boolean statement that is true if tb1 and tb2 overlap,
-    taking into account their day.
-    """
-    return And(overlap_constraint(tb1, tb2), TimeBlock.day(tb1) == TimeBlock.day(tb2))
 
 def not_any_sameday(tbs):
     all_constraints = []
@@ -134,5 +123,8 @@ def make_constraints(students):
     return s
 
 s = make_constraints(students)
+start = timer()
 print(s.check())
+end = timer()
+print('Time taken to check sat: {}'.format(end-start))
 print(s.model())
