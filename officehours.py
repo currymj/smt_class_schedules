@@ -3,6 +3,8 @@ from collections import defaultdict
 import csv
 from pprint import pprint
 from timeit import default_timer as timer
+import maya
+from maya import MayaInterval
 
 Day, (monday, tuesday, wednesday, thursday, friday) = EnumSort(
     'Day', ('monday', 'tuesday', 'wednesday', 'thursday', 'friday'))
@@ -16,6 +18,27 @@ timeblock = TimeBlock.timeblock
 starttime = TimeBlock.starttime
 endtime = TimeBlock.endtime
 none = TimeBlock.none
+
+START_HOUR = 9
+def timecode_to_time(code):
+    hour = START_HOUR + ((code - 1) // 4)
+    minute = 15 * ((code - 1) % 3)
+    return (hour, minute)
+
+assert timecode_to_time(1) == (9, 0)
+assert timecode_to_time(2) == (9, 15)
+assert timecode_to_time(5) == (10, 15)
+
+def timeblock_to_daytime(day, start_code, end_code):
+    start_hour, start_minute = timecode_to_time(start_code)
+    end_hour, end_minute = timecode_to_time(end_code)
+    time_string = '{}: {}:{:02d} to {}:{:02d}'.format(
+        day, start_hour, start_minute, end_hour, end_minute
+    )
+    return time_string
+
+
+
 
 def block_length(tb):
     "returns the length of a time block (defaulting to 0 for none)"
@@ -118,13 +141,31 @@ def make_constraints(students):
         s.add(not_any_sameday(assignment_vars[student_name]))
 
         block_lengths = [block_length(tb) for tb in assignment_vars[student_name]]
-        s.add(Sum(block_lengths) == students[student_name]["num_hours"])
+        # all blocks at least an hour
+        for bl in block_lengths:
+            s.add(Implies(bl > 0, bl >= 4))
+        s.add(Sum(block_lengths) == 4*students[student_name]["num_hours"])
 
-    return s
+    return s, assignment_vars
 
-s = make_constraints(students)
+s, variables = make_constraints(students)
 start = timer()
 print(s.check())
 end = timer()
 print('Time taken to check sat: {}'.format(end-start))
-print(s.model())
+m = s.model()
+
+for student_name in variables:
+    print(student_name)
+    for sv in variables[student_name]:
+        if m.eval(sv != none):
+            start_code = m.eval(starttime(sv)).as_long()
+            end_code = m.eval(endtime(sv)).as_long()
+            day = str(m.eval(TimeBlock.day(sv)))
+            start_hour, start_minute = timecode_to_time(start_code)
+            end_hour, end_minute = timecode_to_time(end_code)
+
+            print('{}: {}:{:02d} to {}:{:02d}'.format(
+                day, start_hour, start_minute, end_hour, end_minute
+            ))
+    print('================')
